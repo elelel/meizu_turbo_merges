@@ -36,8 +36,9 @@ static int __init irq_affinity_setup(char *str)
 }
 __setup("irqaffinity=", irq_affinity_setup);
 
+#ifdef CONFIG_SCHED_HMP
 extern struct cpumask hmp_slow_cpu_mask;
-
+#endif
 static void __init init_irq_default_affinity(void)
 {
 #ifdef CONFIG_CPUMASK_OFFSTACK
