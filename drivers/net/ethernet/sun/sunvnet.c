@@ -656,7 +656,7 @@ static int vnet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_lock_irqsave(&port->vio.lock, flags);
 
 	dr = &port->vio.drings[VIO_DRIVER_TX_RING];
-	if (unlikely(vnet_tx_dring_avail(dr) < 2)) {
+	if (unlikely(vnet_tx_dring_avail(dr) < 1)) {
 		if (!netif_queue_stopped(dev)) {
 			netif_stop_queue(dev);
 
