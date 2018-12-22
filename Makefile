@@ -340,6 +340,11 @@ DEPMOD		= /sbin/depmod
 PERL		= perl
 CHECK		= sparse
 
+ifeq ($(CONFIG_FIPS_FMP),)
+    READELF        = $(CROSS_COMPILE)readelf
+    export READELF
+endif
+
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
 CFLAGS_MODULE   =
@@ -373,7 +378,8 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
-		   -fno-delete-null-pointer-checks
+		   -fno-delete-null-pointer-checks \
+		   -fdiagnostics-show-option -Werror
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
