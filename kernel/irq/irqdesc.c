@@ -45,12 +45,14 @@ static void __init init_irq_default_affinity(void)
 	if (!irq_default_affinity)
 		zalloc_cpumask_var(&irq_default_affinity, GFP_NOWAIT);
 #endif
-	if (cpumask_empty(irq_default_affinity))
 #ifdef CONFIG_SCHED_HMP
+	if (!cpumask_empty(&hmp_slow_cpu_mask)) {
 		cpumask_copy(irq_default_affinity, &hmp_slow_cpu_mask);
-#else
-		cpumask_setall(irq_default_affinity);
+		return;
+	}
 #endif
+	if (cpumask_empty(irq_default_affinity))
+		cpumask_setall(irq_default_affinity);
 }
 #else
 static void __init init_irq_default_affinity(void)
