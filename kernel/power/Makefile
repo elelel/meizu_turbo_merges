@@ -16,3 +16,8 @@ obj-$(CONFIG_SUSPEND_TIME)	+= suspend_time.o
 obj-$(CONFIG_MAGIC_SYSRQ)	+= poweroff.o
 
 obj-$(CONFIG_SUSPEND)	+= wakeup_reason.o
+
+obj-$(CONFIG_POWER_MODE)	+= power_mode.o
+
+obj-$(CONFIG_PERF_MODE)		+= perf_mode.o
+
