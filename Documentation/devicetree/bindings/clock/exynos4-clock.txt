@@ -66,6 +66,8 @@ Exynos4 SoC and this is specified where applicable.
   sclk_dac            138
   sclk_pixel          139
   sclk_fimd0          140
+  sclk_mdnie0         141     Exynos4412
+  sclk_mdnie_pwm0 12  142     Exynos4412
   sclk_mipi0          143
   sclk_audio0         144
   sclk_mmc0           145
@@ -136,6 +138,7 @@ Exynos4 SoC and this is specified where applicable.
   smmu_mdma           282     Exynos4210
   fimd0               283
   mie0                284
+  mdnie0              285     Exynos4412
   dsim0               286
   smmu_fimd0          287
   fimd1               288     Exynos4210
