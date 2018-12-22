@@ -23,6 +23,8 @@ source "drivers/gpu/drm/Kconfig"
 
 source "drivers/gpu/host1x/Kconfig"
 
+source "drivers/gpu/arm/Kconfig"
+
 config VGASTATE
        tristate
        default n
@@ -112,7 +114,7 @@ config FB_BOOT_VESA_SUPPORT
 config FB_CFB_FILLRECT
 	tristate
 	depends on FB
-	default n
+	default y
 	---help---
 	  Include the cfb_fillrect function for generic software rectangle
 	  filling. This is used by drivers that don't provide their own
@@ -121,7 +123,7 @@ config FB_CFB_FILLRECT
 config FB_CFB_COPYAREA
 	tristate
 	depends on FB
-	default n
+	default y
 	---help---
 	  Include the cfb_copyarea function for generic software area copying.
 	  This is used by drivers that don't provide their own (accelerated)
@@ -130,7 +132,7 @@ config FB_CFB_COPYAREA
 config FB_CFB_IMAGEBLIT
 	tristate
 	depends on FB
-	default n
+	default y
 	---help---
 	  Include the cfb_imageblit function for generic software image
 	  blitting. This is used by drivers that don't provide their own
@@ -2057,6 +2059,8 @@ config FB_TMIO_ACCELL
 	depends on FB_TMIO
 	default y
 
+source "drivers/video/decon_display/Kconfig"
+
 config FB_S3C
 	tristate "Samsung S3C framebuffer support"
 	depends on FB && (CPU_S3C2416 || ARCH_S3C64XX || ARCH_S5P64X0 || \
@@ -2319,6 +2323,11 @@ config FB_MB862XX
 	select FB_CFB_IMAGEBLIT
 	---help---
 	  Frame buffer driver for Fujitsu Carmine/Coral-P(A)/Lime controllers.
+
+config S5P_LCD_INIT
+	bool "LCD init in kernel"
+	depends on EXYNOS_VIDEO || DECON
+	default y
 
 choice
 	prompt "GDC variant"
