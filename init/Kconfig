@@ -54,7 +54,15 @@ config CROSS_COMPILE
 	  directory to select the cross-compiler automatically.
 
 config LOCALVERSION
-	string "Local version - append to kernel release"
+	string
+	#string "Local version - append to kernel release"
+	default "-eng"  if ENG_KERNEL
+	default "-user" if USER_KERNEL
+	default "-unicom" if UNICOM_KERNEL
+	default "-overseas" if OVERSEAS_KERNEL
+	default "-recovery" if RECOVERY_KERNEL
+	default "-charge" if CHARGE_KERNEL
+	default "-factory" if FACTORY_KERNEL
 	help
 	  Append an extra string to the end of your kernel version.
 	  This will show up when you type uname, for example.
@@ -756,6 +764,9 @@ config LOG_BUF_SHIFT
 # Architectures with an unreliable sched_clock() should select this:
 #
 config HAVE_UNSTABLE_SCHED_CLOCK
+	bool
+
+config GENERIC_SCHED_CLOCK
 	bool
 
 #
