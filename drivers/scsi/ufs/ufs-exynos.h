@@ -511,4 +511,5 @@ struct ufs_attr_log {
 	u32 res;
 	u32 val;
 };
+
 #endif /* _UFS_EXYNOS_H_ */

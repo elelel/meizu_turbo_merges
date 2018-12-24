@@ -1280,11 +1280,6 @@ static int sd_ioctl(struct block_device *bdev, fmode_t mode,
 	SCSI_LOG_IOCTL(1, sd_printk(KERN_INFO, sdkp, "sd_ioctl: disk=%s, "
 				    "cmd=0x%x\n", disk->disk_name, cmd));
 
-	/* Forbid setting device's ro attribute */
-	if (cmd == BLKROSET) {
-		return -EACCES;
-	}
-
 	error = scsi_verify_blk_ioctl(bdev, cmd);
 	if (error < 0)
 		return error;
@@ -2261,7 +2256,7 @@ sd_read_write_protect_flag(struct scsi_disk *sdkp, unsigned char *buffer)
 	struct scsi_mode_data data;
 	int old_wp = sdkp->write_prot;
 
-	//set_disk_ro(sdkp->disk, 0);
+	set_disk_ro(sdkp->disk, 0);
 	if (sdp->skip_ms_page_3f) {
 		sd_printk(KERN_NOTICE, sdkp, "Assuming Write Enabled\n");
 		return;
@@ -2299,7 +2294,7 @@ sd_read_write_protect_flag(struct scsi_disk *sdkp, unsigned char *buffer)
 			  "Test WP failed, assume Write Enabled\n");
 	} else {
 		sdkp->write_prot = ((data.device_specific & 0x80) != 0);
-		//set_disk_ro(sdkp->disk, sdkp->write_prot);
+		set_disk_ro(sdkp->disk, sdkp->write_prot);
 		if (sdkp->first_scan || old_wp != sdkp->write_prot) {
 			sd_printk(KERN_NOTICE, sdkp, "Write Protect is %s\n",
 				  sdkp->write_prot ? "on" : "off");
