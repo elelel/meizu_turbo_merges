@@ -67,11 +67,4 @@ extern int debug;
 			__func__, __LINE__, ##args);		\
 	} while (0)
 
-#define mfc_dbg_ctx(fmt, args...)				\
-	do {							\
-		printk(KERN_DEBUG "[d:%d, c:%d] %s:%d: " fmt,	\
-			ctx->dev->id, ctx->num,			\
-			__func__, __LINE__, ##args);		\
-	} while (0)
-
 #endif /* S5P_MFC_DEBUG_H_ */

@@ -36,7 +36,9 @@ static void mfc_qos_operate(struct s5p_mfc_ctx *ctx, int opr_type, int idx)
 	struct s5p_mfc_platdata *pdata = dev->pdata;
 	struct s5p_mfc_qos *qos_table = pdata->qos_table;
 
-	if (ctx->buf_process_type & MFCBUFPROC_COPY) {
+	if (ctx->qos_changed)
+		ctx->qos_changed = 0;
+	if (ctx->use_extra_qos) {
 		if (pdata->qos_extra[idx].thrd_mb != MFC_QOS_FLAG_NODATA) {
 			qos_table = pdata->qos_extra;
 #ifdef CONFIG_ARM_EXYNOS_MP_CPUFREQ
@@ -85,7 +87,7 @@ static void mfc_qos_operate(struct s5p_mfc_ctx *ctx, int opr_type, int idx)
 				qos_table[idx].freq_kfc);
 #endif
 		atomic_set(&dev->qos_req_cur, idx + 1);
-		mfc_dbg_ctx("QoS request: %d\n", idx + 1);
+		mfc_info_ctx("QoS request: %d\n", idx + 1);
 		break;
 	case MFC_QOS_UPDATE:
 		if (dev->curr_rate < qos_table[idx].freq_mfc) {
@@ -131,7 +133,7 @@ static void mfc_qos_operate(struct s5p_mfc_ctx *ctx, int opr_type, int idx)
 				qos_table[idx].freq_kfc);
 #endif
 		atomic_set(&dev->qos_req_cur, idx + 1);
-		mfc_dbg_ctx("QoS update: %d\n", idx + 1);
+		mfc_info_ctx("QoS update: %d\n", idx + 1);
 		break;
 	case MFC_QOS_REMOVE:
 		MFC_TRACE_CTX("++ QOS remove(prev mfc:%d)\n",
@@ -154,7 +156,7 @@ static void mfc_qos_operate(struct s5p_mfc_ctx *ctx, int opr_type, int idx)
 		pm_qos_remove_request(&dev->qos_req_cluster0);
 #endif
 		atomic_set(&dev->qos_req_cur, 0);
-		mfc_dbg_ctx("QoS remove\n");
+		mfc_info_ctx("QoS remove\n");
 		break;
 	default:
 		mfc_err_ctx("Unknown request for opr [%d]\n", opr_type);
@@ -173,7 +175,7 @@ static void mfc_qos_print(struct s5p_mfc_ctx *ctx,
 			qos_table[index].freq_cpu);
 #endif
 #ifdef CONFIG_ARM_EXYNOS_MP_CPUFREQ
-	mfc_dbg_ctx("\tint: %d(%d), mif: %d, cpu: %d, kfc: %d\n",
+	mfc_info_ctx("\tint: %d(%d), mif: %d, cpu: %d, kfc: %d\n",
 			qos_table[index].freq_int,
 			qos_table[index].freq_mfc,
 			qos_table[index].freq_mif,
@@ -210,6 +212,9 @@ static void mfc_qos_add_or_update(struct s5p_mfc_ctx *ctx, int total_mb)
 				mfc_qos_operate(ctx, MFC_QOS_ADD, i);
 			} else if (atomic_read(&dev->qos_req_cur) != (i + 1)) {
 				mfc_qos_print(ctx, qos_table, i);
+				mfc_qos_operate(ctx, MFC_QOS_UPDATE, i);
+			} else if (atomic_read(&dev->qos_req_cur) == (i + 1) &&
+					ctx->qos_changed) {
 				mfc_qos_operate(ctx, MFC_QOS_UPDATE, i);
 			}
 			break;

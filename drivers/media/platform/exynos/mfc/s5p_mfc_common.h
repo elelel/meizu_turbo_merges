@@ -37,6 +37,8 @@
 #include <linux/pm_qos.h>
 #endif
 
+#define MFC_DRIVER_INFO		180315
+
 #define MFC_MAX_BUFFERS		32
 #define MFC_MAX_REF_BUFS	2
 #define MFC_FRAME_PLANES	2
@@ -47,15 +49,15 @@
 #define MFC_NUM_CONTEXTS	32
 #define MFC_MAX_DRM_CTX		2
 /* Interrupt timeout */
-#define MFC_INT_TIMEOUT		2000
+#define MFC_INT_TIMEOUT		15000
 /* Interrupt short timeout */
-#define MFC_INT_SHORT_TIMEOUT	800
+#define MFC_INT_SHORT_TIMEOUT	3000
 /* Busy wait timeout */
 #define MFC_BW_TIMEOUT		500
 /* Watchdog interval */
 #define MFC_WATCHDOG_INTERVAL   1000
 /* After how many executions watchdog should assume lock up */
-#define MFC_WATCHDOG_CNT        5
+#define MFC_WATCHDOG_CNT        15
 
 #define MFC_NO_INSTANCE_SET	-1
 
@@ -71,6 +73,7 @@
 #define MFC_BASE_MASK		((1 << 17) - 1)
 
 #define FLAG_LAST_FRAME		0x80000000
+#define FLAG_CSD		0x20000000
 #define MFC_MAX_INTERVAL	(2 * USEC_PER_SEC)
 
 /* Maximum number of temporal layers */
@@ -125,7 +128,7 @@ enum s5p_mfc_inst_state {
 	MFCINST_INIT = 100,
 	MFCINST_GOT_INST,
 	MFCINST_HEAD_PARSED,
-	MFCINST_BUFS_SET,
+	MFCINST_RUNNING_BUF_FULL,
 	MFCINST_RUNNING,
 	MFCINST_FINISHING,
 	MFCINST_FINISHED,
@@ -139,6 +142,8 @@ enum s5p_mfc_inst_state {
 	MFCINST_ABORT_INST,
 	MFCINST_DPB_FLUSHING,
 	MFCINST_VPS_PARSED_ONLY,
+	MFCINST_SPECIAL_PARSING,
+	MFCINST_SPECIAL_PARSING_NAL,
 };
 
 /**
@@ -180,15 +185,6 @@ enum mfc_buf_usage_type {
 	MFCBUF_INVALID = 0,
 	MFCBUF_NORMAL,
 	MFCBUF_DRM,
-};
-
-enum mfc_buf_process_type {
-	MFCBUFPROC_DEFAULT 		= 0x0,
-	MFCBUFPROC_COPY 		= (1 << 0),
-	MFCBUFPROC_SHARE 		= (1 << 1),
-	MFCBUFPROC_META 		= (1 << 2),
-	MFCBUFPROC_ANBSHARE		= (1 << 3),
-	MFCBUFPROC_ANBSHARE_NV12L	= (1 << 4),
 };
 
 struct s5p_mfc_ctx;
@@ -237,6 +233,7 @@ struct s5p_mfc_buf {
 	int used;
 	int already;
 	int consumed;
+	unsigned char *vir_addr;
 };
 
 #define vb_to_mfc_buf(x)	\
@@ -363,6 +360,7 @@ struct s5p_mfc_dev {
 	int curr_ctx;
 	int preempt_ctx;
 	unsigned long ctx_work_bits;
+	unsigned long ctx_stop_bits;
 
 	atomic_t watchdog_cnt;
 	atomic_t watchdog_run;
@@ -434,6 +432,10 @@ struct s5p_mfc_h264_enc_params {
 	u8 rc_frame_qp;
 	u8 rc_min_qp;
 	u8 rc_max_qp;
+	u8 rc_min_qp_p;
+	u8 rc_max_qp_p;
+	u8 rc_min_qp_b;
+	u8 rc_max_qp_b;
 	u8 rc_mb_dark;
 	u8 rc_mb_smooth;
 	u8 rc_mb_static;
@@ -446,11 +448,12 @@ struct s5p_mfc_h264_enc_params {
 	u16 ext_sar_height;
 	u8 open_gop;
 	u16 open_gop_size;
-	u8 hier_qp;
+	u8 hier_qp_enable;
 	enum v4l2_mpeg_video_h264_hierarchical_coding_type hier_qp_type;
-	u8 hier_qp_layer;
-	u8 hier_qp_layer_qp[7];
-	u32 hier_qp_layer_bit[7];
+	u8 num_hier_layer;
+	u8 hier_ref_type;
+	u8 hier_qp_layer[7];
+	u32 hier_bit_layer[7];
 	u8 sei_gen_enable;
 	u8 sei_fp_curr_frame_0;
 	enum v4l2_mpeg_video_h264_sei_fp_arrangement_type sei_fp_arrangement_type;
@@ -464,6 +467,11 @@ struct s5p_mfc_h264_enc_params {
 	u32 aso_slice_order[8];
 
 	u32 prepend_sps_pps_to_idr;
+	u8 enable_ltr;
+	u8 num_of_ltr;
+	u32 set_priority;
+	u32 base_priority;
+	u32 vui_enable;
 };
 
 /**
@@ -482,6 +490,10 @@ struct s5p_mfc_mpeg4_enc_params {
 	u8 rc_frame_qp;
 	u8 rc_min_qp;
 	u8 rc_max_qp;
+	u8 rc_min_qp_p;
+	u8 rc_max_qp_p;
+	u8 rc_min_qp_b;
+	u8 rc_max_qp_b;
 	u8 rc_p_frame_qp;
 };
 
@@ -494,19 +506,21 @@ struct s5p_mfc_vp8_enc_params {
 	u8 vp8_version;
 	u8 rc_min_qp;
 	u8 rc_max_qp;
+	u8 rc_min_qp_p;
+	u8 rc_max_qp_p;
 	u8 rc_frame_qp;
 	u8 rc_p_frame_qp;
 	u8 vp8_numberofpartitions;
 	u8 vp8_filterlevel;
 	u8 vp8_filtersharpness;
 	u8 vp8_goldenframesel;
-	u8 vp8_gfrefreshperiod;
-	u8 hierarchy_qp_enable;
-	u8 hier_qp_layer_qp[3];
-	u32 hier_qp_layer_bit[3];
+	u16 vp8_gfrefreshperiod;
+	u8 hier_qp_enable;
+	u8 hier_qp_layer[3];
+	u32 hier_bit_layer[3];
 	u8 num_refs_for_p;
 	u8 intra_4x4mode_disable;
-	u8 num_temporal_layer;
+	u8 num_hier_layer;
 };
 
 /**
@@ -519,6 +533,10 @@ struct s5p_mfc_hevc_enc_params {
 	u32 rc_framerate;
 	u8 rc_min_qp;
 	u8 rc_max_qp;
+	u8 rc_min_qp_p;
+	u8 rc_max_qp_p;
+	u8 rc_min_qp_b;
+	u8 rc_max_qp_b;
 	u8 rc_lcu_dark;
 	u8 rc_lcu_smooth;
 	u8 rc_lcu_static;
@@ -529,11 +547,9 @@ struct s5p_mfc_hevc_enc_params {
 	u8 max_partition_depth;
 	u8 num_refs_for_p;
 	u8 refreshtype;
-	u8 refreshperiod;
-	s8 croma_qp_offset_cr;
-	s8 croma_qp_offset_cb;
-	s8 lf_beta_offset_div2;
-	s8 lf_tc_offset_div2;
+	u16 refreshperiod;
+	s32 lf_beta_offset_div2;
+	s32 lf_tc_offset_div2;
 	u8 loopfilter_disable;
 	u8 loopfilter_across;
 	u8 nal_control_length_filed;
@@ -542,12 +558,13 @@ struct s5p_mfc_hevc_enc_params {
 	u8 const_intra_period_enable;
 	u8 lossless_cu_enable;
 	u8 wavefront_enable;
-	u8 longterm_ref_enable;
-	u8 hier_qp;
-	u8 hier_qp_type;
-	u8 hier_qp_layer;
-	u8 hier_qp_layer_qp;
-	u8 hier_qp_layer_bit;
+	u8 enable_ltr;
+	u8 hier_qp_enable;
+	enum v4l2_mpeg_video_hevc_hierarchical_coding_type hier_qp_type;
+	u8 hier_ref_type;
+	u8 num_hier_layer;
+	u8 hier_qp_layer[7];
+	u32 hier_bit_layer[7];
 	u8 sign_data_hiding;
 	u8 general_pb_enable;
 	u8 temporal_id_enable;
@@ -560,6 +577,7 @@ struct s5p_mfc_hevc_enc_params {
 	u8 size_of_length_field;
 	u8 user_ref;
 	u8 store_ref;
+	u8 prepend_sps_pps_to_idr;
 };
 
 /**
@@ -571,9 +589,10 @@ struct s5p_mfc_enc_params {
 
 	u32 gop_size;
 	enum v4l2_mpeg_video_multi_slice_mode slice_mode;
-	u16 slice_mb;
+	u32 slice_mb;
 	u32 slice_bit;
-	u16 intra_refresh_mb;
+	u32 slice_mb_row;
+	u32 intra_refresh_mb;
 	u8 pad;
 	u8 pad_luma;
 	u8 pad_cb;
@@ -581,6 +600,8 @@ struct s5p_mfc_enc_params {
 	u8 rc_frame;
 	u32 rc_bitrate;
 	u16 rc_reaction_coeff;
+	u32 config_qp;
+	u32 dynamic_qp;
 	u8 frame_tag;
 
 	u8 num_b_frame;		/* H.264/MPEG4 */
@@ -589,6 +610,7 @@ struct s5p_mfc_enc_params {
 	enum v4l2_mpeg_video_header_mode seq_hdr_mode;
 	enum v4l2_mpeg_mfc51_video_frame_skip_mode frame_skip_mode;
 	u8 fixed_target_bit;
+	u8 num_hier_max_layer;
 
 	u16 rc_frame_delta;	/* MFC6.1 Only */
 
@@ -652,6 +674,7 @@ struct s5p_mfc_buf_ctrl {
 	int has_new;
 	int val;
 	unsigned int old_val;		/* only for MFC_CTRL_TYPE_SET */
+	unsigned int old_val2;		/* only for MFC_CTRL_TYPE_SET */
 	unsigned int is_volatile;	/* only for MFC_CTRL_TYPE_SET */
 	unsigned int updated;
 	unsigned int mode;
@@ -740,7 +763,7 @@ struct s5p_mfc_raw_info {
 	int plane_size[3];
 };
 
-#define MFC_TIME_INDEX		8
+#define MFC_TIME_INDEX		15
 struct mfc_timestamp {
 	struct list_head list;
 	struct timeval timestamp;
@@ -805,6 +828,8 @@ struct s5p_mfc_dec {
 	struct mfc_user_shared_handle sh_handle;
 
 	int dynamic_ref_filled;
+
+	unsigned int err_sync_flag;
 };
 
 struct s5p_mfc_enc {
@@ -831,6 +856,7 @@ struct s5p_mfc_enc {
 		unsigned int bits;
 	} slice_size;
 	unsigned int in_slice;
+	unsigned int buf_full;
 
 	int stored_tag;
 	struct mfc_user_shared_handle sh_handle;
@@ -872,6 +898,15 @@ struct s5p_mfc_ctx {
 	int dpb_count;
 	int buf_stride;
 
+	int old_img_width;
+	int old_img_height;
+
+	unsigned int enc_drc_flag;
+	int enc_res_change;
+	int enc_res_change_state;
+	int enc_res_change_re_input;
+	size_t min_scratch_buf_size;
+
 	struct s5p_mfc_raw_info raw_buf;
 	int mv_size;
 
@@ -879,10 +914,12 @@ struct s5p_mfc_ctx {
 	void *port_a_buf;
 	size_t port_a_phys;
 	size_t port_a_size;
+	void *port_a_virt;
 
 	void *port_b_buf;
 	size_t port_b_phys;
 	size_t port_b_size;
+	void *port_b_virt;
 
 	enum s5p_mfc_queue_state capture_state;
 	enum s5p_mfc_queue_state output_state;
@@ -926,16 +963,15 @@ struct s5p_mfc_ctx {
 	struct list_head qos_list;
 #endif
 	int qos_ratio;
+	int qos_changed;
 	int framerate;
 	int last_framerate;
 	int avg_framerate;
 	int frame_count;
 	struct timeval last_timestamp;
-	int qp_min_change;
-	int qp_max_change;
 
 	int is_max_fps;
-	int buf_process_type;
+	int use_extra_qos;
 
 	struct mfc_timestamp ts_array[MFC_TIME_INDEX];
 	struct list_head ts_list;
@@ -1054,8 +1090,6 @@ static inline unsigned int mfc_version(struct s5p_mfc_dev *dev)
 					(dev->fw.date >= 0x121005)) ||	\
 					(IS_MFCv5X(dev) &&		\
 					(dev->fw.date >= 0x120823)))
-#define FW_HAS_VUI_PARAMS(dev)		(IS_MFCV6(dev) &&		\
-					(dev->fw.date >= 0x121214))
 #define FW_HAS_ADV_RC_MODE(dev)		(IS_MFCV6(dev) &&		\
 					(dev->fw.date >= 0x130329))
 #define FW_HAS_I_LIMIT_RC_MODE(dev)	((IS_MFCv7X(dev) &&		\
@@ -1080,11 +1114,18 @@ static inline unsigned int mfc_version(struct s5p_mfc_dev *dev)
 
 #define FW_NEED_SHARED_MEMORY(dev)	(IS_MFCv5X(dev) || IS_MFCv6X(dev) ||	\
 					IS_MFCv7X(dev) || IS_MFCv78(dev))
+#if 0		/* Do not use last frame info */
 #define FW_HAS_LAST_DISP_INFO(dev)	(IS_MFCv9X(dev) &&			\
-					(dev->fw.date >= 0x141205))
+ 					(dev->fw.date >= 0x141205))
+#else
+#define FW_HAS_LAST_DISP_INFO(dev)	0
+#endif
 #define FW_HAS_GOP2(dev)		(IS_MFCv9X(dev) &&			\
 					(dev->fw.date >= 0x150316))
 #define FW_HAS_E_MIN_SCRATCH_BUF(dev)	IS_MFCv9X(dev)
+
+#define FW_SUPPORT_SKYPE(dev)		IS_MFCv9X(dev) &&		\
+					(dev->fw.date >= 0x150603)
 
 #define HW_LOCK_CLEAR_MASK		(0xFFFFFFFF)
 
@@ -1102,15 +1143,30 @@ static inline unsigned int mfc_version(struct s5p_mfc_dev *dev)
 #define interlaced_cond(ctx)	is_mpeg4vc1(ctx) || is_mpeg2(ctx) || is_h264(ctx)
 #define on_res_change(ctx)	((ctx)->state >= MFCINST_RES_CHANGE_INIT &&	\
 				 (ctx)->state <= MFCINST_RES_CHANGE_END)
+#define need_to_wait_frame_start(ctx)		\
+	(((ctx->state == MFCINST_FINISHING) ||	\
+	  (ctx->state == MFCINST_RUNNING)) &&	\
+	 test_bit(ctx->num, &ctx->dev->hw_lock))
+#define need_to_wait_nal_abort(ctx)		 \
+	(ctx->state == MFCINST_ABORT_INST)
+#define need_to_special_parsing(ctx)		\
+	((ctx->state == MFCINST_GOT_INST) ||	\
+	 (ctx->state == MFCINST_HEAD_PARSED))
+#define need_to_special_parsing_nal(ctx)	\
+	((ctx->state == MFCINST_RUNNING) ||	\
+	 (ctx->state == MFCINST_ABORT))
 
 /* Extra information for Decoder */
 #define	DEC_SET_DUAL_DPB		(1 << 0)
 #define	DEC_SET_DYNAMIC_DPB		(1 << 1)
 #define	DEC_SET_LAST_FRAME_INFO		(1 << 2)
+#define	DEC_SET_SKYPE_FLAG		(1 << 3)
 /* Extra information for Encoder */
 #define	ENC_SET_RGB_INPUT		(1 << 0)
 #define	ENC_SET_SPARE_SIZE		(1 << 1)
 #define	ENC_SET_TEMP_SVC_CH		(1 << 2)
+#define	ENC_SET_SKYPE_FLAG		(1 << 3)
+#define	ENC_SET_QP_BOUND_PB		(1 << 5)
 
 #define MFC_QOS_FLAG_NODATA		0xFFFFFFFF
 
@@ -1129,8 +1185,11 @@ static inline int clear_hw_bit(struct s5p_mfc_ctx *ctx)
 	struct s5p_mfc_dev *dev = ctx->dev;
 	int ret = -1;
 
-	if (!atomic_read(&dev->watchdog_run))
+	if (!atomic_read(&dev->watchdog_run)) {
 		ret = test_and_clear_bit(ctx->num, &dev->hw_lock);
+		/* Reset the timeout watchdog */
+		atomic_set(&dev->watchdog_cnt, 0);
+	}
 
 	return ret;
 }
